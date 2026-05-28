@@ -1,0 +1,110 @@
+{
+  "Generic": [
+    {
+      "id": "T1110",
+      "name": "Brute Force",
+      "tactic": "Credential Access"
+    },
+    {
+      "id": "T1071",
+      "name": "Application Layer Protocol",
+      "tactic": "C2"
+    }
+  ],
+  "Exploits": [
+    {
+      "id": "T1190",
+      "name": "Exploit Public-Facing App",
+      "tactic": "Initial Access"
+    },
+    {
+      "id": "T1203",
+      "name": "Exploitation for Execution",
+      "tactic": "Execution"
+    }
+  ],
+  "Fuzzers": [
+    {
+      "id": "T1595.002",
+      "name": "Vulnerability Scanning",
+      "tactic": "Reconnaissance"
+    },
+    {
+      "id": "T1190",
+      "name": "Exploit Public-Facing App",
+      "tactic": "Initial Access"
+    }
+  ],
+  "DoS": [
+    {
+      "id": "T1499",
+      "name": "Endpoint Denial of Service",
+      "tactic": "Impact"
+    },
+    {
+      "id": "T1498",
+      "name": "Network Denial of Service",
+      "tactic": "Impact"
+    }
+  ],
+  "Reconnaissance": [
+    {
+      "id": "T1595",
+      "name": "Active Scanning",
+      "tactic": "Reconnaissance"
+    },
+    {
+      "id": "T1590",
+      "name": "Gather Victim Network Info",
+      "tactic": "Reconnaissance"
+    }
+  ],
+  "Analysis": [
+    {
+      "id": "T1046",
+      "name": "Network Service Discovery",
+      "tactic": "Discovery"
+    },
+    {
+      "id": "T1040",
+      "name": "Network Sniffing",
+      "tactic": "Credential Access"
+    }
+  ],
+  "Backdoor": [
+    {
+      "id": "T1543",
+      "name": "Create/Modify System Process",
+      "tactic": "Persistence"
+    },
+    {
+      "id": "T1078",
+      "name": "Valid Accounts",
+      "tactic": "Defense Evasion"
+    }
+  ],
+  "Shellcode": [
+    {
+      "id": "T1055",
+      "name": "Process Injection",
+      "tactic": "Defense Evasion"
+    },
+    {
+      "id": "T1059",
+      "name": "Command and Scripting",
+      "tactic": "Execution"
+    }
+  ],
+  "Worms": [
+    {
+      "id": "T1210",
+      "name": "Exploitation of Remote Svc",
+      "tactic": "Lateral Movement"
+    },
+    {
+      "id": "T1570",
+      "name": "Lateral Tool Transfer",
+      "tactic": "Lateral Movement"
+    }
+  ]
+}

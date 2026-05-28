@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HoneyTrack - Attack Dashboard</title>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+</script>
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js">
+</script>
+
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --border:   #30363d;
+  --muted:    #8b949e;
+  --text:     #e6edf3;
+  --blue:     #58a6ff;
+  --green:    #3fb950;
+  --yellow:   #d29922;
+  --red:      #f85149;
+  --orange:   #f0883e;
+  --purple:   #bc8cff;
+}
+body { font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+header {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:14px 28px; display:flex; align-items:center; gap:12px;
+  position:sticky; top:0; z-index:100;
+}
+header h1 { font-size:1.3rem; color:var(--blue); font-weight:700; }
+.live-badge {
+  background:#1f6feb; color:#fff; padding:3px 10px;
+  border-radius:20px; font-size:0.72rem; font-weight:600; letter-spacing:.5px;
+}
+.pulse-dot {
+  width:9px; height:9px; border-radius:50%; background:var(--green);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+.header-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
+.refresh-info { font-size:.78rem; color:var(--muted); }
+.ml-badge {
+  font-size:.72rem; padding:3px 10px; border-radius:20px;
+  background:#1a2a1a; color:var(--green); border:1px solid #2a4a2a;
+}
+.page { padding:24px 28px; display:flex; flex-direction:column; gap:20px; }
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.kpi {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:20px 22px;
+  display:flex; align-items:center; gap:16px;
+  transition:border-color .2s;
+}
+.kpi:hover { border-color:#58a6ff55; }
+.kpi-icon { font-size:1.8rem; }
+.kpi-val { font-size:2rem; font-weight:700; line-height:1; }
+.kpi-label { font-size:.78rem; color:var(--muted); margin-top:4px; }
+.kpi.red   .kpi-val { color:var(--red); }
+.kpi.blue  .kpi-val { color:var(--blue); }
+.kpi.yellow .kpi-val { color:var(--yellow); }
+.kpi.green .kpi-val { color:var(--green); }
+.row-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.row-2 { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; }
+.row-map { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; }
+.row-full { display:grid; grid-template-columns:1fr; gap:16px; }
+.panel {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:14px;
+  height:fit-content;
+}
+.panel-header { display:flex; align-items:center; justify-content:space-between; }
+.panel-title { font-size:.85rem; color:var(--muted); font-weight:600; letter-spacing:.4px; text-transform:uppercase; }
+.panel-count { font-size:.75rem; color:var(--muted); background:#21262d; padding:2px 8px; border-radius:10px; }
+.chart-wrap { position:relative; flex:1; min-height:180px; display:flex; align-items:center; justify-content:center; }
+.chart-wrap canvas { max-height:220px; width:100% !important; }
+#attack-map { height:320px; border-radius:8px; z-index:1; width:100%; }
+.tbl-wrap { overflow-x:auto; width:100%; }
+table { width:100%; border-collapse:collapse; font-size:.82rem; }
+th { color:var(--muted); text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-weight:500; white-space:nowrap; }
+td { padding:8px 10px; border-bottom:1px solid #21262d; }
+tr:last-child td { border:none; }
+tr:hover td { background:#1c2128; }
+code { font-size:.8rem; color:var(--blue); background:#1c2a3a; padding:1px 6px; border-radius:4px; }
+.sev { padding:2px 8px; border-radius:4px; font-size:.72rem; font-weight:700; }
+.CRITICAL { background:#490202; color:var(--red); }
+.HIGH     { background:#3d1a00; color:var(--orange); }
+.MEDIUM   { background:#3d3000; color:var(--yellow); }
+.LOW      { background:#0d2a0d; color:var(--green); }
+.mitre-tag {
+  display:inline-block; font-size:.7rem; padding:1px 7px;
+  background:#1a1a3a; color:var(--purple); border:1px solid #2a2a5a;
+  border-radius:4px; margin:1px;
+}
+.vt-clean    { color:var(--green); }
+.vt-bad      { color:var(--red); font-weight:600; }
+.vt-pending  { color:var(--muted); }
+.feed { display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; }
+.feed-item {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:8px 10px; background:#1c2128; border-radius:8px;
+  border-left:3px solid var(--border); font-size:.8rem;
+}
+.feed-item.ssh  { border-color:var(--blue); }
+.feed-item.http { border-color:var(--green); }
+.feed-item.alert{ border-color:var(--red); }
+.feed-time { color:var(--muted); font-size:.72rem; white-space:nowrap; }
+.feed-icon { font-size:1rem; }
+.progress-bar {
+  height:4px; background:#21262d; border-radius:2px; margin-top:4px; overflow:hidden;
+}
+.progress-fill {
+  height:100%; border-radius:2px; transition:width .3s;
+}
+.mitre-desc { font-size:.7rem; color:var(--muted); }
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#30363d; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span>🍯</span>
+  <h1>HoneyTrack</h1>
+  <span class="live-badge">LIVE</span>
+  <button onclick="exportCSV()" style="background:#21262d; border:1px solid #30363d; color:#58a6ff; padding:5px 12px; border-radius:8px; cursor:pointer; font-size:0.72rem;">📥 Export CSV</button>
+  <button onclick="exportAlerts()" style="background:#21262d; border:1px solid #30363d; color:#f0883e; padding:5px 12px; border-radius:8px; cursor:pointer; font-size:0.72rem;">🚨 Export Alerts</button>
+  <span class="pulse-dot"></span>
+  <div class="header-right">
+    <span class="ml-badge" id="ml-status">⚙️ ML: Initializing</span>
+    <span class="refresh-info" id="last-refresh">Connecting...</span>
+  </div>
+</header>
+
+<div class="page">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi red"><span class="kpi-icon">⚔️</span><div><div class="kpi-val" id="k-attacks">–</div><div class="kpi-label">Total Attacks</div></div></div>
+    <div class="kpi blue"><span class="kpi-icon">🌐</span><div><div class="kpi-val" id="k-ips">–</div><div class="kpi-label">Unique Attacker IPs</div></div></div>
+    <div class="kpi yellow"><span class="kpi-icon">🚨</span><div><div class="kpi-val" id="k-alerts">–</div><div class="kpi-label">Open Alerts</div></div></div>
+    <div class="kpi green"><span class="kpi-icon">🤖</span><div><div class="kpi-val" id="k-anomalies">–</div><div class="kpi-label">ML Anomalies</div></div></div>
+  </div>
+
+  <!-- Charts Row: Timeline, Protocols, Attack Types -->
+  <div class="row-3">
+    <div class="panel"><div class="panel-header"><span class="panel-title">📈 Attacks Over Time</span></div><div class="chart-wrap"><canvas id="chart-timeline"></canvas></div></div>
+    <div class="panel"><div class="panel-header"><span class="panel-title">🔌 Protocol Breakdown</span></div><div class="chart-wrap"><canvas id="chart-protocols"></canvas></div></div>
+    <div class="panel"><div class="panel-header"><span class="panel-title">🎯 Attack Types (Dynamic)</span></div><div class="chart-wrap"><canvas id="chart-types"></canvas></div></div>
+  </div>
+
+  <!-- Map + VirusTotal Detailed Panel -->
+  <div class="row-map">
+    <div class="panel" style="padding:12px;"><div class="panel-header"><span class="panel-title">🗺️ Attacker Origins</span></div><div id="attack-map"></div></div>
+    <div class="panel" id="vt-panel">
+      <div class="panel-header">
+        <span class="panel-title">🛡️ VirusTotal Intelligence</span>
+        <span class="panel-count" id="vt-count">0</span>
+      </div>
+      <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Country</th>
+              <th>Malicious</th>
+              <th>Suspicious</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-vt">
+            <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Waiting for VT scans...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MITRE ATT&CK Panel (Full Width) -->
+  <div class="row-full">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">🛡️ MITRE ATT&CK Techniques</span>
+        <span class="panel-count" id="mitre-count">0</span>
+      </div>
+      <div class="tbl-wrap" style="max-height:300px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Technique ID</th>
+              <th>Description</th>
+              <th>Count</th>
+              <th>Frequency</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-mitre">
+            <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:20px">No MITRE data yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Attackers + Active Alerts -->
+  <div class="row-2">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">👤 Recent Attackers</span>
+        <span class="panel-count" id="attackers-count">0</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>IP Address</th>
+              <th>Country</th>
+              <th>Attacks</th>
+              <th>VT Verdict</th>
+              <th>MITRE</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-attackers">
+            <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Waiting for attacks...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">🚨 Active Alerts</span>
+        <span class="panel-count" id="alerts-count">0</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Type</th>
+              <th>Severity</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-alerts">
+            <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:20px">No alerts yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Activity Feed -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">⚡ Live Activity Feed</span>
+      <span class="panel-count" id="feed-count">0 events</span>
+    </div>
+    <div class="feed" id="activity-feed">
+      <div class="feed-item" style="color:var(--muted)">Waiting for events...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = 'Segoe UI';
+
+// MITRE ATT&CK Descriptions Map
+const MITRE_DESCRIPTIONS = {
+  'T1190': 'Exploit Public-Facing Application',
+  'T1203': 'Exploitation for Client Execution',
+  'T1498': 'Network Denial of Service',
+  'T1499': 'Endpoint Denial of Service',
+  'T1110': 'Brute Force',
+  'T1078': 'Valid Accounts',
+  'T1059': 'Command and Scripting Interpreter',
+  'T1210': 'Exploitation of Remote Services',
+  'T1046': 'Network Service Scanning',
+  'T1133': 'External Remote Services',
+  'T1584': 'Compromise Infrastructure',
+  'T1505': 'Server Software Component',
+  'T1195': 'Supply Chain Compromise',
+  'T1204': 'User Execution',
+  'T1068': 'Exploitation for Privilege Escalation'
+};
+
+// Initialize Charts
+const timelineCtx = document.getElementById('chart-timeline').getContext('2d');
+const timelineChart = new Chart(timelineCtx, {
+  type: 'line', 
+  data: { 
+    labels: [], 
+    datasets: [{
+      label: 'Attacks', 
+      data: [], 
+      borderColor: '#f85149', 
+      backgroundColor: 'rgba(248,81,73,0.1)', 
+      borderWidth: 2, 
+      fill: true, 
+      tension: 0.4, 
+      pointRadius: 3 
+    }] 
+  },
+  options: { 
+    responsive: true, 
+    maintainAspectRatio: false, 
+    plugins: { legend: { display: false } }, 
+    scales: { 
+      x: { grid: { color: '#21262d' } }, 
+      y: { grid: { color: '#21262d' }, beginAtZero: true, ticks: { precision: 0 } } 
+    } 
+  }
+});
+
+const protocolCtx = document.getElementById('chart-protocols').getContext('2d');
+const protocolChart = new Chart(protocolCtx, {
+  type: 'doughnut', 
+  data: { 
+    labels: ['SSH', 'HTTP'], 
+    datasets: [{
+      data: [0, 0], 
+      backgroundColor: ['#58a6ff', '#3fb950'], 
+      borderColor: '#161b22', 
+      borderWidth: 3 
+    }] 
+  },
+  options: { 
+    responsive: true, 
+    maintainAspectRatio: false, 
+    plugins: { 
+      legend: { position: 'bottom', labels: { padding: 16, font: { size: 11 } } } 
+    }, 
+    cutout: '65%' 
+  }
+});
+
+// Attack Types Chart - FULLY DYNAMIC
+const typesCtx = document.getElementById('chart-types').getContext('2d');
+const typesChart = new Chart(typesCtx, {
+  type: 'bar', 
+  data: { 
+    labels: [],  // Will be filled from API
+    datasets: [{
+      data: [],  // Will be filled from API
+      backgroundColor: ['#f85149','#f0883e','#d29922','#bc8cff','#58a6ff','#3fb950','#00e5ff'], 
+      borderRadius: 6 
+    }] 
+  },
+  options: { 
+    responsive: true, 
+    maintainAspectRatio: false, 
+    plugins: { legend: { display: false } }, 
+    scales: { 
+      x: { grid: { display: false } }, 
+      y: { grid: { color: '#21262d' }, beginAtZero: true, ticks: { precision: 0 } } 
+    } 
+  }
+});
+
+// Map initialization
+const map = L.map('attack-map', { zoomControl: true }).setView([20, 0], 2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+  attribution: '© CartoDB', 
+  maxZoom: 18 
+}).addTo(map);
+const markers = {};
+
+function addMapMarker(lat, lng, ip, country, count) {
+  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  if (markers[key]) {
+    markers[key].setPopupContent(`<b>${ip}</b><br>${country}<br>Attacks: ${count}`);
+    return;
+  }
+  const size = Math.min(8 + count * 1.5, 30);
+  const circle = L.circleMarker([lat, lng], {
+    radius: size,
+    color: '#f85149',
+    fillColor: '#f85149',
+    fillOpacity: 0.6,
+    weight: 1,
+  }).addTo(map);
+  circle.bindPopup(`<b>${ip}</b><br>${country}<br>Attacks: ${count}`);
+  circle.bindTooltip(`${country}<br>${ip}`, { sticky: true });
+  markers[key] = circle;
+}
+
+const timelineData = {};
+const feedEvents = [];
+
+function updateKPIs(data) {
+  document.getElementById('k-attacks').textContent = data.total_attacks || 0;
+  document.getElementById('k-ips').textContent = data.total_unique_ips || 0;
+  document.getElementById('k-alerts').textContent = data.open_alerts || 0;
+  document.getElementById('k-anomalies').textContent = data.anomalies_detected || 0;
+}
+
+function updateAttackersTable(attackers) {
+  document.getElementById('attackers-count').textContent = attackers.length;
+  const tbody = document.getElementById('tbl-attackers');
+  if (!attackers.length) { 
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">No attackers yet</td></tr>'; 
+    return; 
+  }
+  
+  tbody.innerHTML = attackers.map(a => {
+    let vtVerdict = '<span class="vt-pending">⏳ Pending</span>';
+    if (a.vt_checked) {
+      if (a.vt_malicious > 10) {
+        vtVerdict = `<span class="vt-bad">🔴 Malicious (${a.vt_malicious})</span>`;
+      } else if (a.vt_malicious > 3) {
+        vtVerdict = `<span style="color:#f0883e">🟠 Suspicious (${a.vt_malicious})</span>`;
+      } else if (a.vt_malicious > 0) {
+        vtVerdict = `<span style="color:#d29922">🟡 Low Risk (${a.vt_malicious})</span>`;
+      } else {
+        vtVerdict = '<span class="vt-clean">✅ Clean</span>';
+      }
+    }
+    
+    const mitreTags = a.mitre_tags && a.mitre_tags.length > 0 
+      ? a.mitre_tags.slice(0, 2).map(t => `<span class="mitre-tag">${t}</span>`).join('') 
+      : '<span style="color:var(--muted)">–</span>';
+    
+    const time = a.last_seen ? a.last_seen.substring(11,19) : '–';
+    
+    return `
+      <tr>
+        <td><code>${a.ip_address}</code></td>
+        <td>${a.country || '?'}</td>
+        <td>${a.attack_count}</td>
+        <td>${vtVerdict}</td>
+        <td>${mitreTags}</td>
+        <td>${time}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function updateAlertsTable(alerts) {
+  document.getElementById('alerts-count').textContent = alerts.length;
+  const tbody = document.getElementById('tbl-alerts');
+  if (!alerts.length) { 
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:20px">No alerts</td></tr>'; 
+    return; 
+  }
+  
+  tbody.innerHTML = alerts.map(a => `
+    <tr>
+      <td><code>${a.ip_address}</code></td>
+      <td style="font-size:.78rem">${a.alert_type}</td>
+      <td><span class="sev ${a.severity}">${a.severity}</span></td>
+      <td style="color:var(--muted);font-size:.75rem">${a.created_at ? a.created_at.substring(11,19) : '–'}</td>
+    </tr>
+  `).join('');
+}
+
+function updateTimelineChart(attackers) {
+  attackers.forEach(a => { 
+    if (a.last_seen) { 
+      const hour = a.last_seen.substring(0, 13).replace('T', ' '); 
+      timelineData[hour] = (timelineData[hour] || 0) + (a.attack_count || 1); 
+    } 
+  });
+  
+  const sorted = Object.keys(timelineData).sort().slice(-12);
+  timelineChart.data.labels = sorted.map(h => h.substring(8));
+  timelineChart.data.datasets[0].data = sorted.map(h => timelineData[h]);
+  timelineChart.update('none');
+}
+
+function updateProtocolChart(data) {
+  const ssh = data.ssh_count || Math.round((data.total_attacks || 0) * 0.6);
+  const http = data.http_count || Math.round((data.total_attacks || 0) * 0.4);
+  protocolChart.data.datasets[0].data = [ssh, http];
+  protocolChart.update('none');
+}
+
+// ⭐ UPDATED: Full dynamic attack types from ML + HTTP + SSH
+function updateTypesChart(data) {
+  const typeCounts = {};
+  
+  // من ML results - attack_type من الـ DB
+  (data.recent_attackers || []).forEach(a => {
+    if (a.attack_type && a.attack_type !== 'null' && a.attack_type !== 'None') {
+      typeCounts[a.attack_type] = (typeCounts[a.attack_type] || 0) + (a.attack_count || 1);
+    }
+  });
+
+  // من HTTP stats - من الـ API مباشرة
+  if (data.sqli_count > 0)      typeCounts['SQL Injection']    = data.sqli_count;
+  if (data.xss_count > 0)       typeCounts['XSS']              = data.xss_count;
+  if (data.traversal_count > 0) typeCounts['Path Traversal']   = data.traversal_count;
+  if (data.http_attack_count > 0) typeCounts['Scanner']        = data.http_attack_count;
+  
+  // من SSH stats - Brute Force
+  if (data.brute_force_count > 0) typeCounts['Brute Force']    = data.brute_force_count;
+
+  const labels = Object.keys(typeCounts);
+  const values = Object.values(typeCounts);
+  const colors = ['#f85149','#f0883e','#d29922','#bc8cff','#58a6ff','#3fb950','#00e5ff'];
+
+  typesChart.data.labels = labels;
+  typesChart.data.datasets[0].data = values;
+  typesChart.data.datasets[0].backgroundColor = colors.slice(0, labels.length);
+  typesChart.update('none');
+}
+
+function updateMitreTable(data) {
+  const mitreCounts = data.mitre_counts || {};
+  const mitreBody = document.getElementById('tbl-mitre');
+  const mitreCount = document.getElementById('mitre-count');
+  
+  const entries = Object.entries(mitreCounts).sort((a, b) => b[1] - a[1]);
+  mitreCount.textContent = entries.length;
+  
+  if (!entries.length) {
+    mitreBody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:20px">No MITRE data yet</td></tr>';
+    return;
+  }
+  
+  const maxCount = entries[0]?.[1] || 1;
+  
+  mitreBody.innerHTML = entries.map(([technique, count]) => {
+    const description = MITRE_DESCRIPTIONS[technique] || 'Unknown Technique';
+    const percentage = ((count / maxCount) * 100).toFixed(0);
+    
+    return `
+      <tr>
+        <td><code style="color:#bc8cff;">${technique}</code></td>
+        <td>
+          <div style="font-size:.82rem;">${description}</div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${percentage}%;background:var(--purple);"></div>
+          </div>
+        </td>
+        <td style="text-align:center;"><strong>${count}</strong></td>
+        <td style="text-align:center;font-size:.75rem;color:var(--muted);">${percentage}%</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function updateVTTable(data) {
+  const vtBody = document.getElementById('tbl-vt');
+  const vtCount = document.getElementById('vt-count');
+  const attackers = data.recent_attackers || [];
+  
+  vtCount.textContent = attackers.length;
+  
+  if (!attackers.length) { 
+    vtBody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Waiting for VT scans...</td></tr>'; 
+    return; 
+  }
+  
+  vtBody.innerHTML = attackers.map(a => {
+    let verdict = '<span class="vt-pending">⏳ Pending</span>';
+    if (a.vt_checked) {
+      if (a.vt_malicious > 10) {
+        verdict = `<span class="vt-bad">🔴 Malicious</span>`;
+      } else if (a.vt_malicious > 3) {
+        verdict = `<span style="color:var(--orange);">🟠 Suspicious</span>`;
+      } else if (a.vt_malicious > 0) {
+        verdict = `<span style="color:var(--yellow);">🟡 Low Risk</span>`;
+      } else {
+        verdict = `<span class="vt-clean">🟢 Clean</span>`;
+      }
+    }
+    
+    return `
+      <tr>
+        <td><code>${a.ip_address}</code></td>
+        <td>${a.country || '?'}</td>
+        <td style="color:var(--red);">${a.vt_malicious || 0}</td>
+        <td style="color:var(--yellow);">${a.vt_suspicious || 0}</td>
+        <td>${verdict}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function updateMap(data) {
+  const geoPoints = data.geo_points || [];
+  if (geoPoints.length > 0) {
+    geoPoints.forEach(p => {
+      if (p.latitude && p.longitude) {
+        addMapMarker(p.latitude, p.longitude, p.ip_address, p.country || 'Unknown', p.attack_count);
+      }
+    });
+    return;
+  }
+  
+  if (data.recent_attackers) {
+    const COUNTRY_COORDS = { 
+      'US': [37.09, -95.71], 'CN': [35.86, 104.19], 'RU': [61.52, 105.31], 
+      'DE': [51.16, 10.45], 'BR': [-14.23, -51.92], 'FR': [46.22, 2.21], 
+      'NL': [52.13, 5.29], 'KR': [35.90, 127.76], 'JO': [30.58, 36.23], 
+      'IR': [32.42, 53.68], 'ZA': [-30.55, 22.93], 'GB': [55.37, -3.43],
+      'JP': [36.20, 138.25], 'IN': [20.59, 78.96], 'CA': [56.13, -106.34]
+    };
+    
+    data.recent_attackers.forEach(a => {
+      const coords = COUNTRY_COORDS[a.country];
+      if (coords) {
+        addMapMarker(
+          coords[0] + (Math.random()-0.5)*2, 
+          coords[1] + (Math.random()-0.5)*2, 
+          a.ip_address, 
+          a.country || '?', 
+          a.attack_count
+        );
+      }
+    });
+  }
+}
+
+function addFeedItem(ip, type, detail) {
+  const icons = { ssh: '🔑', http: '🌐', alert: '🚨' };
+  const now = new Date().toLocaleTimeString();
+  feedEvents.unshift({ ip, type, detail, time: now });
+  if (feedEvents.length > 30) feedEvents.pop();
+  
+  const feed = document.getElementById('activity-feed');
+  feed.innerHTML = feedEvents.map(e => `
+    <div class="feed-item ${e.type}">
+      <span class="feed-icon">${icons[e.type] || '•'}</span>
+      <div style="flex:1">
+        <code>${e.ip}</code>
+        <span style="color:var(--text);margin-left:6px">${e.detail}</span>
+      </div>
+      <span class="feed-time">${e.time}</span>
+    </div>
+  `).join('');
+  
+  document.getElementById('feed-count').textContent = feedEvents.length + ' events';
+}
+
+function exportCSV() { window.open('/api/export/csv', '_blank'); }
+function exportAlerts() { window.open('/api/export/alerts', '_blank'); }
+
+async function refresh() {
+  try {
+    const [statsRes, healthRes] = await Promise.all([
+      fetch('/api/stats'), 
+      fetch('/api/health')
+    ]);
+    
+    const data = await statsRes.json();
+    const health = await healthRes.json();
+    
+    // Update all panels
+    updateKPIs(data);
+    updateAttackersTable(data.recent_attackers || []);
+    updateAlertsTable(data.recent_alerts || []);
+    updateTimelineChart(data.recent_attackers || []);
+    updateProtocolChart(data);
+    updateTypesChart(data);  // ⭐ FULL DYNAMIC TYPES
+    updateMitreTable(data);
+    updateMap(data);
+    updateVTTable(data);
+    
+    // Add feed events for recent activity
+    (data.recent_attackers || []).slice(0, 3).forEach(a => { 
+      const attackType = a.attack_type || 'attack';
+      const vtInfo = a.vt_checked ? ` [VT: ${a.vt_malicious || 0}]` : '';
+      addFeedItem(a.ip_address, 'ssh', `${a.attack_count} ${attackType} from ${a.country || '?'}${vtInfo}`); 
+    });
+    
+    (data.recent_alerts || []).slice(0, 2).forEach(a => { 
+      addFeedItem(a.ip_address, 'alert', `${a.severity} — ${a.alert_type}`); 
+    });
+    
+    // Update ML status
+    const mlEl = document.getElementById('ml-status');
+    mlEl.textContent = health.ml_trained ? '🤖 ML: Active' : '⚙️ ML: Training';
+    mlEl.style.color = health.ml_trained ? 'var(--green)' : 'var(--yellow)';
+    
+    document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    
+  } catch(e) {
+    console.error('Dashboard refresh error:', e);
+    document.getElementById('last-refresh').textContent = '⚠️ Connection error';
+  }
+}
+
+// Initial refresh and auto-update every 5 seconds
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
